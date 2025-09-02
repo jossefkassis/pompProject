@@ -1,0 +1,5 @@
+export { default as Cannon } from './Cannon'
+export { default as Barrel } from './Barrel'
+export { default as Base } from './base'
+export { default as Carriage } from './Carriage'
+export { default as Wheel } from './wheel'
