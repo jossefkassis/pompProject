@@ -1,6 +1,6 @@
   import React, { useRef, useState } from "react";
   import { Canvas } from "@react-three/fiber";
-  import { OrbitControls } from "@react-three/drei";
+  import { OrbitControls,Sky } from "@react-three/drei";
   import { Leva, useControls } from "leva";
   import * as THREE from "three";
 
@@ -12,6 +12,7 @@
   export default function App() {
     const cannonRef = useRef();
     const [shot, setShot] = useState(null); // { id, initialPosition, initialVelocity, params }
+    const [hitPoints, setHitPoints] = useState([]);
 
     const controls = useControls("إعدادات المحاكاة", {
       muzzleSpeed: { value: 60, min: 1, max: 300, step: 1 },
@@ -78,7 +79,11 @@
       }
     };
 
-    const handleReset = () => setShot(null);
+    const handleReset = () => {
+      setShot(null)
+      setHitPoints([]);
+      if (cannonRef.current?.reset) cannonRef.current.reset();
+    };
 
     return (
       <>
@@ -94,12 +99,30 @@
         <Leva collapsed />
 
         <Canvas shadows camera={{ position: [10, 8, 14], fov: 50 }} style={{ width: "100vw", height: "100vh" }}>
+            <Sky
+              distance={2000} // how far the sky dome is
+              sunPosition={[1, 2, 3]}
+              inclination={0}
+              azimuth={0.25}
+            />
           <OrbitControls />
           <SceneLights />
           <Ground />
           {/* azimuth الآن يُستخدم داخل المدفع لتوجيهه ولحساب اتجاه الارتداد */}
-          <Cannon ref={cannonRef} elevationDeg={controls.elevationDeg} azimuth={controls.azimuth} />
-          <gridHelper args={[500, 50, "black", "black"]} rotation={[0, 0, 0]} />
+          <Cannon
+            ref={cannonRef}
+            elevationDeg={controls.elevationDeg}
+            azimuth={controls.azimuth}
+            recoilMagnify={100}   // ← 5× visible recoil
+          />
+
+       {hitPoints.map((p, i) => (
+         <mesh key={i} position={[p.x, 0.01, p.z]}>
+           <sphereGeometry args={[2, 12, 12]} />
+           <meshStandardMaterial color="red" />
+         </mesh>
+       ))}
+          <gridHelper args={[1500, 150, "black", "black"]} rotation={[0, 0, 0]} />
 
           {shot && (
             <Projectile
@@ -107,6 +130,9 @@
               initialPosition={shot.initialPosition}
               initialVelocity={shot.initialVelocity}
               params={shot.params}
+              onFirstGroundHit={(pos) => {
+                setHitPoints((hp) => [...hp, pos]);
+              }}
             />
           )}
         </Canvas>

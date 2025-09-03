@@ -6,7 +6,7 @@ export default function Ground() {
       rotation-x={-Math.PI / 2}
       receiveShadow
     >
-      <planeGeometry args={[500, 500]} />
+      <planeGeometry args={[1500, 1500]} />
       <meshStandardMaterial color="#a3b1a8" />
     </mesh>
   )

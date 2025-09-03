@@ -4,7 +4,10 @@ import * as THREE from "three";
 import { Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 
-export default function Projectile({ params = {} }) {
+export default function Projectile({
+  params = {},
+  onFirstGroundHit,          // ← new prop
+}) {
   const {
     muzzleSpeed = 60,
     elevationDeg = 35,
@@ -29,6 +32,7 @@ export default function Projectile({ params = {} }) {
   const velocity = useRef(new THREE.Vector3());
   const position = useRef(new THREE.Vector3());
   const active = useRef(true);
+  const hitEmitted = useRef(false); // ← track first hit
 
   const [trajectory, setTrajectory] = useState([]);
   const [idealPath, setIdealPath] = useState([]);
@@ -38,7 +42,9 @@ export default function Projectile({ params = {} }) {
   const windVec = new THREE.Vector3(windX, windY, windZ);
 
   useEffect(() => {
+    // reset on new shot
     position.current.set(0, 1.5, 0);
+    hitEmitted.current = false;
 
     const theta = THREE.MathUtils.degToRad(elevationDeg);
     const phi = THREE.MathUtils.degToRad(azimuth);
@@ -80,45 +86,53 @@ export default function Projectile({ params = {} }) {
   useFrame((_, delta) => {
     if (!meshRef.current || !active.current) return;
 
-    // مقاومة الهواء + الرياح
+    // aerodynamic drag + wind
     if (dragOn) {
       const relVel = velocity.current.clone();
       if (windOn) relVel.sub(windVec);
       const v = relVel.length();
       if (v > 0) {
         const dragMag = 0.5 * rho * Cd * area * v * v;
-        const dragAcc = relVel.clone().multiplyScalar(-1 / v).multiplyScalar(dragMag / mass);
+        const dragAcc = relVel
+          .clone()
+          .multiplyScalar(-1 / v)
+          .multiplyScalar(dragMag / mass);
         velocity.current.addScaledVector(dragAcc, delta);
       }
     }
 
+    // gravity & integrate
     velocity.current.addScaledVector(gravity, delta);
     position.current.addScaledVector(velocity.current, delta);
 
-    // ارتداد عند الاصطدام بالأرض
-   // ارتداد عند الاصطدام بالأرض
-if (position.current.y <= 0) {
-  position.current.y = 0;
+    // collision with ground
+    if (position.current.y <= 0) {
+      position.current.y = 0;
 
-  // هل السرعة الرأسية كافية للارتداد؟
-  if (Math.abs(velocity.current.y) > 0.01) {
-    velocity.current.y *= -restitution;
+      // fire callback once
+      if (!hitEmitted.current) {
+        hitEmitted.current = true;
+        if (onFirstGroundHit) {
+          onFirstGroundHit(position.current.clone());
+        }
+      }
 
-    // فقدان طفيف إضافي للطاقة (اختياري)
-    velocity.current.y *= 0.98;
+      // bounce or stop
+      if (Math.abs(velocity.current.y) > 0.01) {
+        velocity.current.y *= -restitution;
+        velocity.current.y *= 0.98;              // optional extra loss
+        velocity.current.x *= friction;
+        velocity.current.z *= friction;
+      } else {
+        velocity.current.set(0, 0, 0);
+        active.current = false;
+      }
+    }
 
-    // تقليل السرعة الأفقية بالاحتكاك
-    velocity.current.x *= friction;
-    velocity.current.z *= friction;
-  } else {
-    velocity.current.set(0, 0, 0);
-    active.current = false;
-  }
-}
-
-
+    // apply position
     meshRef.current.position.copy(position.current);
 
+    // record trajectory
     if (recordPath) {
       setTrajectory((prev) => {
         if (prev.length > 4000) return [...prev.slice(1), position.current.clone()];
